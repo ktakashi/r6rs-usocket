@@ -1,0 +1,30 @@
+#!r6rs
+(import (rnrs)
+	(usocket))
+
+(define service "10000")
+(define echo-server-socket (make-tcp-server-socket service))
+
+(define (socket-shutdown&close s)
+  (socket-shutdown! s *usocket:shutdown-read&write*)
+  (socket-close! s))
+
+(define (echo-server-start! socket)
+  (let loop ((s (server-socket-accept! socket)))
+    (define in (transcoded-port (client-socket-input-port s)
+				(native-transcoder)))
+    (define out (transcoded-port (client-socket-output-port s)
+				 (native-transcoder)))
+    (let loop2 ()
+      (let ((line (get-line in)))
+	(cond ((or (eof-object? line) (string=? line "exit"))
+	       (socket-shutdown&close s)
+	       (socket-shutdown&close socket))
+	      ((string=? line "nomore")
+	       (socket-shutdown&close s)
+	       (loop (server-socket-accept! socket)))
+	      (else (put-string out line)
+		    (flush-output-port out)
+		    (loop2)))))))
+
+(echo-server-start! echo-server-socket)

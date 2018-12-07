@@ -42,7 +42,7 @@
 	    client-socket-input-port
 	    client-socket-output-port
 
-	    make-server-socket
+	    server-socket?
 	    server-socket-accept!
 
 	    make-tcp-client-socket

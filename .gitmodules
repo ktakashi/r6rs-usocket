@@ -1,0 +1,3 @@
+[submodule "pffi"]
+	path = pffi
+	url = https://github.com/ktakashi/r6rs-pffi.git

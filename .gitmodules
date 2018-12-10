@@ -1,3 +1,6 @@
 [submodule "pffi"]
-	path = pffi
+	path = deps/pffi
 	url = https://github.com/ktakashi/r6rs-pffi.git
+[submodule "deps/psystem"]
+	path = deps/psystem
+	url = https://github.com/ktakashi/r6rs-psystem.git

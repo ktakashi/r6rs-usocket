@@ -30,29 +30,33 @@
 
 #!r6rs
 (library (usocket)
-    (export socket?
-	    socket-close!
-	    socket-shutdown!
+    (export usocket?
+	    usocket-close!
+	    usocket-shutdown!
 
 	    *usocket:shutdown-read*
 	    *usocket:shutdown-write*
 	    *usocket:shutdown-read&write*
 
-	    client-socket?
-	    client-socket-input-port
-	    client-socket-output-port
+	    client-usocket?
+	    client-usocket-input-port
+	    client-usocket-output-port
 
-	    server-socket?
-	    server-socket-accept!
+	    server-usocket?
+	    server-usocket-accept!
+	    ;; for developer
+	    make-client-usocket
+	    make-server-usocket
+	    usocket-raw-socket
 
-	    make-tcp-client-socket
-	    make-tcp-server-socket
-	    make-udp-client-socket
-	    make-udp-server-socket
+	    make-tcp-client-usocket
+	    make-tcp-server-usocket
+	    make-udp-client-usocket
+	    make-udp-server-usocket
 
 	    ;; for developers
-	    make-client-socket
-	    make-server-socket
-	    socket-raw-socket)
+	    make-client-usocket
+	    make-server-usocket
+	    usocket-raw-socket)
     (import (usocket types)
 	    (usocket sockets)))

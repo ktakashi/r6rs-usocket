@@ -11,11 +11,11 @@ APIs
 
 The library provides the following APIs.
 
-- `(socket? o)`:
+- `(usocket? o)`:
   Returns `#t` if the given *o* is an socket object, otherwise `#f`
-- `(socket-close! socket)`:
+- `(usocket-close! socket)`:
   Closes the given *socket*.
-- `(socket-shutdown! socket how)`:
+- `(usocket-shutdown! socket how)`:
   Shutdowns the given *socket*, the *how* argument must be the followings:
   - `*usocket:shutdown-read*`:
 	Shutdowns read channel of the given *socket*.
@@ -23,27 +23,27 @@ The library provides the following APIs.
   	Shutdowns write channel of the given *socket*.
   - `*usocket:shutdown-read&write*`:
   	Shutdowns read and write channels of the given *socket*.
-- `(client-socket? o)`:
+- `(client-usocket? o)`:
   Return `#t` if the given *o* is a client socket object, otherwise `#f`.
-- `(client-socket-input-port client-socket)`:
+- `(client-usocket-input-port client-socket)`:
   Return an binrary input port of the given *client-socket*.
-- `(client-socket-output-port client-socket)`:
+- `(client-usocket-output-port client-socket)`:
   Return an binrary output port of the given *client-socket*.
-- `(server-socket? o)`:
+- `(server-usocket? o)`:
   Return `#t` if the given *o* is a server socket object, otherwise `#f`.
-- `(server-socket-accept! server-socket)`:
+- `(server-usocket-accept! server-socket)`:
   Waits until the given *server-socket* receives input and returns
   a client socket.
-- `(make-tcp-client-socket host service)`:
+- `(make-tcp-client-usocket host service)`:
   Create a TCP client socket object which connects to the givne *host* on the
   *service*. The *service* can be an integer or string.
-- `(make-tcp-server-socket service)`:
+- `(make-tcp-server-usocket service)`:
   Create a TCP server socket object which accepts an input on the *service*.
   The *service* can be an integer or string.
-- `(make-udp-client-socket host service)`:
+- `(make-udp-client-usocket host service)`:
   Create a UDP client socket object which connects to the givne *host* on the
   *service*. The *service* can be an integer or string.
-- `(make-udp-server-socket service)`:
+- `(make-udp-server-usocket service)`:
   Create a UDP server socket object which accepts an input on the *service*.
   The *service* can be an integer or string.
 

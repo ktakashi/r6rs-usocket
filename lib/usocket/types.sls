@@ -30,43 +30,43 @@
 
 #!r6rs
 (library (usocket types)
-    (export socket?
-	    socket-close!
-	    socket-shutdown!
+    (export usocket?
+	    usocket-close!
+	    usocket-shutdown!
 
 	    *usocket:shutdown-read*
 	    *usocket:shutdown-write*
 	    *usocket:shutdown-read&write*
 
-	    client-socket?
-	    client-socket-input-port
-	    client-socket-output-port
+	    client-usocket?
+	    client-usocket-input-port
+	    client-usocket-output-port
 
-	    server-socket?
-	    server-socket-accept!
+	    server-usocket?
+	    server-usocket-accept!
 	    ;; for developer
-	    make-client-socket
-	    make-server-socket
-	    socket-raw-socket)
+	    make-client-usocket
+	    make-server-usocket
+	    usocket-raw-socket)
     (import (rnrs))
 
 
-(define-record-type socket
+(define-record-type usocket
   (fields raw-socket shutdowner closer))
-(define-record-type client-socket
-  (parent socket)
+(define-record-type client-usocket
+  (parent usocket)
   (fields input-port output-port))
-(define-record-type server-socket
-  (parent socket)
+(define-record-type server-usocket
+  (parent usocket)
   (fields acceptor))
 
 (define *usocket:shutdown-read* 'read)
 (define *usocket:shutdown-write* 'write)
 (define *usocket:shutdown-read&write* 'read&write)
 
-(define (socket-close! socket) ((socket-closer socket)))
-(define (socket-shutdown! socket how) ((socket-shutdowner socket) how))
+(define (usocket-close! socket) ((usocket-closer socket)))
+(define (usocket-shutdown! socket how) ((usocket-shutdowner socket) how))
 
-(define (server-socket-accept! socket) ((server-socket-acceptor socket)))
+(define (server-usocket-accept! socket) ((server-usocket-acceptor socket)))
 
 )

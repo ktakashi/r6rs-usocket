@@ -31,28 +31,28 @@
 ;; the vanilla version uses SRFI-106
 #!r6rs
 (library (usocket sockets)
-    (export make-tcp-client-socket
-	    make-tcp-server-socket
-	    make-udp-client-socket
-	    make-udp-server-socket)
+    (export make-tcp-client-usocket
+	    make-tcp-server-usocket
+	    make-udp-client-usocket
+	    make-udp-server-usocket)
     (import (rnrs)
 	    (usocket types)
 	    (prefix (srfi :106) srfi:))
 
-(define (make-tcp-client-socket host service)
+(define (make-tcp-client-usocket host service)
   (let ((s (srfi:make-client-socket host service)))
     (%make-socket s)))
 
-(define (make-tcp-server-socket service)
+(define (make-tcp-server-usocket service)
   (let ((s (srfi:make-server-socket service)))
     (%make-server-socket s)))
 
-(define (make-udp-client-socket host service)
+(define (make-udp-client-usocket host service)
   (let ((s (srfi:make-client-socket host service
 				    srfi:*af-inet* srfi:*sock-dgram*)))
     (%make-socket s)))
 
-(define (make-udp-server-socket service)
+(define (make-udp-server-usocket service)
   (let ((s (srfi:make-server-socket service srfi:*af-inet* srfi:*sock-dgram*)))
     (%make-server-socket s)))
 
@@ -66,14 +66,14 @@
 				 "Unknown shutdown method" how)))))
 (define (make-closer s) (lambda () (srfi:socket-close s)))
 (define (%make-socket s)
-  (make-client-socket s
+  (make-client-usocket s
 	       (make-shutdowner s)
 	       (make-closer s)
 	       (srfi:socket-input-port s)
 	       (srfi:socket-output-port s)))
 
 (define (%make-server-socket s)
-  (make-server-socket s
+  (make-server-usocket s
 		      (make-shutdowner s)
 		      (make-closer s)
 		      (lambda () (%make-socket (srfi:socket-accept s)))))

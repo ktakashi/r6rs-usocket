@@ -97,28 +97,28 @@
 ;; int
 ;; getaddrinfo(const char *, const char *, const struct addrinfo *,
 ;;             struct addrinfo **)
-(define getaddrinfo
+(define c:getaddrinfo
   (foreign-procedure *psystem:libc*
 		     int getaddrinfo (pointer pointer pointer pointer)))
-(define freeaddrinfo
+(define c:freeaddrinfo
   (foreign-procedure *psystem:libc* void freeaddrinfo (pointer)))
 
-(define socket
+(define c:socket
   (foreign-procedure *psystem:libc* int socket (int int int)))
 ;; int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-(define connect
+(define c:connect
   (foreign-procedure *psystem:libc* int connect (int pointer int)))
 
-(define close
+(define c:close
   (foreign-procedure *psystem:libc* int close (int)))
-(define shutdown
+(define c:shutdown
   (foreign-procedure *psystem:libc* int shutdown (int int)))
 
 ;; ssize_t send(int sockfd, const void *buf, size_t len, int flags);
-(define send
+(define c:send
   (foreign-procedure *psystem:libc* int send (int pointer unsigned-int int)))
 ;; ssize_t recv(int sockfd, void *buf, size_t len, int flags);
-(define recv
+(define c:recv
   (foreign-procedure *psystem:libc* int recv (int pointer unsigned-int int)))
 
 (define null-pointer (integer->pointer 0))
@@ -144,13 +144,13 @@
   (define protocol (get-optional opts usocket:IPPROTO_IP cdr cdr cdr))
 
   (define (free box)
-    (freeaddrinfo (pointer-ref-c-pointer box 0))
+    (c:freeaddrinfo (pointer-ref-c-pointer box 0))
     (psystem:free box))
   (define (free&error box)
     (free box)
     (error 'make-client-socket "Failed to create a socket" host service))
   (define (free&return box sock addr len)
-    (let ((r (connect sock addr len)))
+    (let ((r (c:connect sock addr len)))
       (free box)
       (unless (zero? r)
 	(error 'make-client-socket "Failed to connect" host service))
@@ -162,14 +162,14 @@
     (addrinfo-ai-family-set! hint family)
     (addrinfo-ai-socktype-set! hint socktype)
     (addrinfo-ai-protocol-set! hint protocol)
-    (let ((r (getaddrinfo host service hint box)))
+    (let ((r (c:getaddrinfo host service hint box)))
       (unless (zero? r)
 	(error 'make-client-socket "Failed to call getaddrinfo" host service))
       (let loop ((result (pointer-ref-c-pointer box 0)))
 	(if (null-pointer? result)
 	    (free&error box)
 	    (let* ((ai (pointer->bytevector result size-of-addrinfo))
-		   (sock (socket (addrinfo-ai-family ai)
+		   (sock (c:socket (addrinfo-ai-family ai)
 				 (addrinfo-ai-socktype ai)
 				 (addrinfo-ai-protocol ai))))
 	      (if (negative? sock)
@@ -177,14 +177,14 @@
 		  (free&return box sock (addrinfo-ai-addr ai)
 			       (addrinfo-ai-addrlen ai)))))))))
 
-(define (socket-close sock) (close (socket-socket sock)))
-(define (socket-shutdown sock how) (shutdown (socket-socket sock) how))
+(define (socket-close sock) (c:close (socket-socket sock)))
+(define (socket-shutdown sock how) (c:shutdown (socket-socket sock) how))
 
 (define (socket-send socket bv . opt)
   (define flags (get-optional opt 0))
   (unless (bytevector? bv)
     (assertion-violation 'socket-send "Bytevector required" bv))
-  (send (socket-socket socket)
+  (c:send (socket-socket socket)
 	bv (bytevector-length bv)
 	(bitwise-ior flags usocket:MSG_NOSIGNAL)))
 
@@ -195,7 +195,7 @@
   ;; supporting implementations have proper bytevector->pointer
   ;; means it can share the buffer
   (define p (bytevector->pointer buf))
-  (let ((c (recv fd p size flags)))
+  (let ((c (c:recv fd p size flags)))
     (cond ((= c size) buf)
 	  ((< c 0) (error 'socket-recv "Failed to receive"))
 	  ((< c size)

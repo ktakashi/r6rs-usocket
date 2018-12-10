@@ -95,9 +95,14 @@ int main(int argc, char **argv)
   push_var(IPPROTO_TCP);
   push_var(IPPROTO_UDP);
   /* MSG_* */
-  push_var(MSG_OOB);
-  push_var(MSG_PEEK);
-  push_var(MSG_WAITALL);
+  push_hex_var(MSG_OOB);
+  push_hex_var(MSG_PEEK);
+  push_hex_var(MSG_WAITALL);
+#ifdef MSG_NOSIGNAL
+  push_hex_var(MSG_NOSIGNAL);
+#else
+  tail = push_variable(&head, tail, "MSG_NOSIGNAL", DECIMAL, 0);
+#endif
   /* SHUT_* */
   push_var(SHUT_RD);
   push_var(SHUT_WR);

@@ -34,6 +34,8 @@
 	    ;; the rest comes later
 	    make-client-socket
 
+	    socket-send
+	    socket-recv
 	    socket-close
 	    socket-shutdown
 	    (rename (usocket:AF_UNSPEC *af-unspec*)
@@ -59,6 +61,7 @@
     (import (rnrs)
 	    (pffi)
 	    (psystem libc)
+	    (psystem os)
 	    (usocket consts))
 
 ;;; TODO Should this be somewhere else?
@@ -78,9 +81,18 @@
 	  (int ai-protocol)
 	  (int ai-addrlen)
 	  ;; the order of these 2 is os dependent (afaik)
-	  (pointer ai-canonname) ;; don't use
-	  (pointer ai-addr)      ;; don't use
+	  ;; i.e. On Linux, ai_addr is before ai_canonname
+	  ;;      On *BSD (incl. OSX) ai_addr is after ai_canonname
+	  ;; who decide this fxxking incompatibility?
+	  (pointer ai-maybe-canonname)
+	  (pointer ai-maybe-addr)      
 	  (pointer ai-next)))    ;; addrinfo
+
+;; Fxxk Fxxk Fxxk!!!
+(define (addrinfo-ai-addr addrinfo)
+  (if (eq? *psystem:os-name* 'Linux)
+      (addrinfo-ai-maybe-canonname addrinfo)
+      (addrinfo-ai-maybe-addr addrinfo)))
 
 ;; int
 ;; getaddrinfo(const char *, const char *, const struct addrinfo *,
@@ -93,10 +105,21 @@
 
 (define socket
   (foreign-procedure *psystem:libc* int socket (int int int)))
+;; int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+(define connect
+  (foreign-procedure *psystem:libc* int connect (int pointer int)))
+
 (define close
   (foreign-procedure *psystem:libc* int close (int)))
 (define shutdown
   (foreign-procedure *psystem:libc* int shutdown (int int)))
+
+;; ssize_t send(int sockfd, const void *buf, size_t len, int flags);
+(define send
+  (foreign-procedure *psystem:libc* int send (int pointer unsigned-int int)))
+;; ssize_t recv(int sockfd, void *buf, size_t len, int flags);
+(define recv
+  (foreign-procedure *psystem:libc* int recv (int pointer unsigned-int int)))
 
 (define null-pointer (integer->pointer 0))
 (define (null-pointer? p) (zero? (pointer->integer p)))
@@ -126,9 +149,12 @@
   (define (free&error box)
     (free box)
     (error 'make-client-socket "Failed to create a socket" host service))
-  (define (free&return box sock)
-    (free box)
-    (make-socket sock 'client host service))
+  (define (free&return box sock addr len)
+    (let ((r (connect sock addr len)))
+      (free box)
+      (unless (zero? r)
+	(error 'make-client-socket "Failed to connect" host service))
+      (make-socket sock 'client host service)))
   
   (let ((box (psystem:malloc size-of-pointer))
 	(hint (make-addrinfo 0 0 0 0 0 null-pointer null-pointer null-pointer)))
@@ -148,10 +174,34 @@
 				 (addrinfo-ai-protocol ai))))
 	      (if (negative? sock)
 		  (loop (addrinfo-ai-next ai))
-		  (free&return box sock))))))))
+		  (free&return box sock (addrinfo-ai-addr ai)
+			       (addrinfo-ai-addrlen ai)))))))))
 
 (define (socket-close sock) (close (socket-socket sock)))
 (define (socket-shutdown sock how) (shutdown (socket-socket sock) how))
 
+(define (socket-send socket bv . opt)
+  (define flags (get-optional opt 0))
+  (unless (bytevector? bv)
+    (assertion-violation 'socket-send "Bytevector required" bv))
+  (send (socket-socket socket)
+	bv (bytevector-length bv)
+	(bitwise-ior flags usocket:MSG_NOSIGNAL)))
+
+(define (socket-recv socket size . opt)
+  (define flags (bitwise-ior (get-optional opt 0) usocket:MSG_NOSIGNAL))
+  (define buf (make-bytevector size))
+  (define fd (socket-socket socket))
+  ;; supporting implementations have proper bytevector->pointer
+  ;; means it can share the buffer
+  (define p (bytevector->pointer buf))
+  (let ((c (recv fd p size flags)))
+    (cond ((= c size) buf)
+	  ((< c 0) (error 'socket-recv "Failed to receive"))
+	  ((< c size)
+	   (let ((r (make-bytevector c)))
+	     (do ((i 0 (+ i 1)))
+		 ((= i c) r)
+	       (bytevector-u8-set! r i (bytevector-u8-ref buf i))))))))
 
 )

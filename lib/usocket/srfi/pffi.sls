@@ -33,11 +33,16 @@
     (export socket?
 	    ;; the rest comes later
 	    make-client-socket
+	    make-server-socket
 
+	    socket-accept ;; for server
 	    socket-send
 	    socket-recv
 	    socket-close
 	    socket-shutdown
+
+	    call-with-socket
+
 	    (rename (usocket:AF_UNSPEC *af-unspec*)
 		    (usocket:AF_INET *af-inet*)
 		    (usocket:AF_INET6 *af-inet6*)
@@ -72,7 +77,14 @@
 	  service
 	  ;; input-port ;; later
 	  ;; output-port ;; later
-	  ))
+	  ;; pollfds we have 2 fds in case of multi thread env
+	  read-poll
+	  write-poll)
+  (protocol (lambda (p)
+	      (lambda (socket type host service)
+		(p socket type host service
+		   (make-pollfd socket usocket:POLLIN 0)
+		   (make-pollfd socket usocket:POLLOUT 0))))))
 
 (define-foreign-struct addrinfo
   (fields (int ai-flags)
@@ -87,6 +99,12 @@
 	  (pointer ai-maybe-canonname)
 	  (pointer ai-maybe-addr)      
 	  (pointer ai-next)))    ;; addrinfo
+
+;; luckily pollfd has the same definition on both Linux and OSX :)
+(define-foreign-struct pollfd
+  (fields (int fd)
+	  (short events)
+	  (short revents)))
 
 ;; Fxxk Fxxk Fxxk!!!
 (define (addrinfo-ai-addr addrinfo)
@@ -108,6 +126,16 @@
 ;; int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 (define c:connect
   (foreign-procedure *psystem:libc* int connect (int pointer int)))
+
+;; int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+(define c:bind
+  (foreign-procedure *psystem:libc* int bind (int pointer int)))
+;; int listen(int sockfd, int backlog);
+(define c:listen
+  (foreign-procedure *psystem:libc* int listen (int int)))
+;; int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+(define c:accept
+  (foreign-procedure *psystem:libc* int accept (int pointer pointer)))
 
 (define c:close
   (foreign-procedure *psystem:libc* int close (int)))
@@ -137,25 +165,8 @@
 ;; SRFI-106
 (define *default-ai-flags*
   (bitwise-ior usocket:AI_V4MAPPED usocket:AI_ADDRCONFIG))
-(define (make-client-socket host service . opts)
-  (define family (get-optional opts usocket:AF_UNSPEC))
-  (define socktype (get-optional opts usocket:SOCK_STREAM cdr))
-  (define flags (get-optional opts *default-ai-flags* cdr cdr))
-  (define protocol (get-optional opts usocket:IPPROTO_IP cdr cdr cdr))
 
-  (define (free box)
-    (c:freeaddrinfo (pointer-ref-c-pointer box 0))
-    (psystem:free box))
-  (define (free&error box)
-    (free box)
-    (error 'make-client-socket "Failed to create a socket" host service))
-  (define (free&return box sock addr len)
-    (let ((r (c:connect sock addr len)))
-      (free box)
-      (unless (zero? r)
-	(error 'make-client-socket "Failed to connect" host service))
-      (make-socket sock 'client host service)))
-  
+(define (getaddrinfo host service flags family socktype protocol)
   (let ((box (psystem:malloc size-of-pointer))
 	(hint (make-addrinfo 0 0 0 0 0 null-pointer null-pointer null-pointer)))
     (addrinfo-ai-flags-set! hint flags)
@@ -164,29 +175,75 @@
     (addrinfo-ai-protocol-set! hint protocol)
     (let ((r (c:getaddrinfo host service hint box)))
       (unless (zero? r)
-	(error 'make-client-socket "Failed to call getaddrinfo" host service))
-      (let loop ((result (pointer-ref-c-pointer box 0)))
-	(if (null-pointer? result)
-	    (free&error box)
-	    (let* ((ai (pointer->bytevector result size-of-addrinfo))
-		   (sock (c:socket (addrinfo-ai-family ai)
-				 (addrinfo-ai-socktype ai)
-				 (addrinfo-ai-protocol ai))))
-	      (if (negative? sock)
-		  (loop (addrinfo-ai-next ai))
-		  (free&return box sock (addrinfo-ai-addr ai)
-			       (addrinfo-ai-addrlen ai)))))))))
+	(psystem:free box)
+	(error 'getaddrinfo "Failed to call getaddrinfo" host service))
+      box)))
+(define (freeaddrinfo box)
+  (c:freeaddrinfo (pointer-ref-c-pointer box 0))
+  (psystem:free box))
+
+(define (get-socket addrinfo c:cont)
+  (let loop ((result addrinfo))
+    (and (not (null-pointer? result))
+	 (let* ((ai (pointer->bytevector result size-of-addrinfo))
+		(sock (c:socket (addrinfo-ai-family ai)
+				(addrinfo-ai-socktype ai)
+				(addrinfo-ai-protocol ai))))
+	   (cond ((< sock 0) (loop (addrinfo-ai-next ai)))
+		 ((zero? (c:cont sock (addrinfo-ai-addr ai)
+				 (addrinfo-ai-addrlen ai))) sock)
+		 (else (c:close sock) (loop (addrinfo-ai-next ai))))))))
+
+(define (make-client-socket host service . opts)
+  (define family (get-optional opts usocket:AF_UNSPEC))
+  (define socktype (get-optional opts usocket:SOCK_STREAM cdr))
+  (define flags (get-optional opts *default-ai-flags* cdr cdr))
+  (define protocol (get-optional opts usocket:IPPROTO_IP cdr cdr cdr))
+  (let* ((box (getaddrinfo host service flags family socktype protocol))
+	 (sock (get-socket (pointer-ref-c-pointer box 0) c:connect)))
+    (freeaddrinfo box)
+    (unless sock (error 'make-client-socket "Failed to connect" host service))
+    (make-socket sock 'client host service)))
+
+(define (make-server-socket service . opts)
+  (define family (get-optional opts usocket:AF_UNSPEC))
+  (define socktype (get-optional opts usocket:SOCK_STREAM cdr))
+  (define protocol (get-optional opts usocket:IPPROTO_IP cdr cdr))
+
+  (let* ((box (getaddrinfo null-pointer service 0 family socktype protocol))
+	 (sock (get-socket (pointer-ref-c-pointer box 0) c:bind)))
+    (freeaddrinfo box)
+    (unless sock (error 'make-server-socket "Failed to bind" service))
+    (when (= socktype usocket:SOCK_STREAM)
+      (unless (zero? (c:listen sock usocket:SOMAXCONN))
+	(c:close sock)
+	(error 'make-server-socket "Failed to listen" service)))
+    (make-socket sock 'server #f service)))
 
 (define (socket-close sock) (c:close (socket-socket sock)))
 (define (socket-shutdown sock how) (c:shutdown (socket-socket sock) how))
+
+(define (socket-accept sock)
+  (define (free ss sl) (c:free ss) (c:free sl))
+  (unless (socket? sock)
+    (assertion-violation 'socket-accept "A socket required" sock))
+  (let ((ss (psystem:malloc usocket:size-of-sockaddr-storage))
+	(sl (psystem:malloc usocket:size-of-socklen_t)))
+    (let ((fd (c:accept (socket-socket sock) ss sl)))
+      (when (= fd -1)
+	(free ss sl)
+	(error 'socket-accept "Failed to accept"))
+      (make-socket fd 'server #f #f))))
 
 (define (socket-send socket bv . opt)
   (define flags (get-optional opt 0))
   (unless (bytevector? bv)
     (assertion-violation 'socket-send "Bytevector required" bv))
+  (unless (socket-writeable? socket)
+    (assertion-violation 'socket-send "Socket is not writable" bv))
   (c:send (socket-socket socket)
-	bv (bytevector-length bv)
-	(bitwise-ior flags usocket:MSG_NOSIGNAL)))
+	  bv (bytevector-length bv)
+	  (bitwise-ior flags usocket:MSG_NOSIGNAL)))
 
 (define (socket-recv socket size . opt)
   (define flags (bitwise-ior (get-optional opt 0) usocket:MSG_NOSIGNAL))
@@ -195,6 +252,7 @@
   ;; supporting implementations have proper bytevector->pointer
   ;; means it can share the buffer
   (define p (bytevector->pointer buf))
+  (unless (socket-readable? socket) (error 'socket-recv "Socket not available"))
   (let ((c (c:recv fd p size flags)))
     (cond ((= c size) buf)
 	  ((< c 0) (error 'socket-recv "Failed to receive"))
@@ -203,5 +261,26 @@
 	     (do ((i 0 (+ i 1)))
 		 ((= i c) r)
 	       (bytevector-u8-set! r i (bytevector-u8-ref buf i))))))))
+
+(define (call-with-socket socket proc)
+  (let-values ((args (proc socket)))
+    (socket-close socket)
+    (apply values args)))
+
+;; internal for now
+
+;; int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+(define c:poll
+  (foreign-procedure *psystem:libc* int poll (pointer unsigned-int int)))
+(define (socket-readable? sock)
+  (define fd (socket-read-poll sock))
+  (let ((n (c:poll fd 1 -1)))
+    (display (pollfd-revents fd)) (newline)
+    (and (= n 1)
+	 (= (bitwise-and (pollfd-revents fd) usocket:POLLIN) usocket:POLLIN)
+	 (zero? (bitwise-and (pollfd-revents fd) usocket:POLLHUP))
+	 (pollfd-revents-set! fd 0))))
+(define (socket-writeable? sock)
+  (= (c:poll (socket-write-poll sock) 1 0) 1))
 
 )

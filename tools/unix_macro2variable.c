@@ -1,5 +1,6 @@
 #include <netdb.h>
 #include <sys/socket.h>
+#include <poll.h>		/* XSI */
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -108,6 +109,26 @@ int main(int argc, char **argv)
   push_var(SHUT_WR);
   push_var(SHUT_RDWR);
 
+  /* SOMAXCONN */
+  push_var(SOMAXCONN);
+
+  /* POLL */
+  push_hex_var(POLLIN);	/* POLLRDNORM | POLLRDBAND but for convenience */
+  push_hex_var(POLLRDNORM);
+  push_hex_var(POLLRDBAND);
+  push_hex_var(POLLPRI);
+  push_hex_var(POLLOUT);
+  push_hex_var(POLLWRNORM);
+  push_hex_var(POLLWRBAND);
+  push_hex_var(POLLERR);
+  push_hex_var(POLLHUP);
+  push_hex_var(POLLNVAL);
+  /* some of we can't handle it from Scheme without this things */
+  tail = push_variable(&head, tail, "size-of-sockaddr-storage", DECIMAL,
+		       sizeof(struct sockaddr_storage));
+  tail = push_variable(&head, tail, "size-of-socklen_t", DECIMAL,
+		       sizeof(socklen_t));
+  
   dump_library(head);
   /* we don't care freeing the allocated memory since this tool is too small
      to care */

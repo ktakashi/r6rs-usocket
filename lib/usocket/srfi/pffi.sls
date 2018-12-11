@@ -36,6 +36,9 @@
 	    make-client-socket
 	    make-server-socket
 
+	    socket-input-port
+	    socket-output-port
+
 	    socket-accept ;; for server
 	    socket-send
 	    socket-recv
@@ -83,16 +86,59 @@
 	  type
 	  host
 	  service
-	  ;; input-port ;; later
-	  ;; output-port ;; later
+	  input-port
+	  output-port
 	  ;; pollfds we have 2 fds in case of multi thread env
 	  read-poll
 	  write-poll)
   (protocol (lambda (p)
 	      (lambda (socket type host service)
-		(p socket type host service
-		   (make-pollfd socket usocket:POLLIN 0)
-		   (make-pollfd socket usocket:POLLOUT 0))))))
+		(let ((read-poll (make-pollfd socket usocket:POLLIN 0)))
+		  (p socket type host service
+		     (make-socket-input-port socket read-poll)
+		     (make-socket-output-port socket)
+		     read-poll
+		     (make-pollfd socket usocket:POLLOUT 0)))))))
+
+(define buffer-size 1024)
+(define (make-socket-input-port fd pollfd)
+  ;; internal buffer
+  (define buffer (make-bytevector buffer-size))
+  (define bufp (bytevector->pointer buffer))
+  (define check-needed? #f)
+  (define (read! bv start count)
+    ;; if the last recv is less than expected or exactly the same
+    ;; as buffer-size, then we need to check if there's next data
+    ;; available or not.
+    (if (and check-needed? (not (pollfd-readable? pollfd 0)))
+	0
+	(let* ((size (min count buffer-size))
+	       (r (c:recv fd bufp size usocket:MSG_NOSIGNAL)))
+	  (when (negative? r) (error 'socket-recv "Failed to receive"))
+	  (set! check-needed?
+		(or (not (= r size)) (and (= count buffer-size) (= r size))))
+	  ;; let the custom port handle the remaining count
+	  (do ((i 0 (+ i 1)))
+	      ((= i r) r)
+	    (bytevector-u8-set! bv (+ i start) (bytevector-u8-ref buffer i))))))
+  (make-custom-binary-input-port "socket-input-port" read! #f #f #f))
+
+(define (make-socket-output-port fd)
+  ;; internal buffer
+  (define buffer (make-bytevector buffer-size))
+  (define bufp (bytevector->pointer buffer))
+  (define (write! bv start count)
+    (let loop ((rest count) (written 0))
+      (if (= written count)
+	  count
+	  (let ((size (min rest buffer-size)))
+	    (do ((i 0 (+ i 1)))
+		((= i size))
+	      (bytevector-u8-set! buffer i (bytevector-u8-ref bv (+ i start))))
+	    (let ((r (c:send fd bufp size usocket:MSG_NOSIGNAL)))
+	      (when (negative? r) (error 'socket-send "Failed to send"))
+	      (loop (- rest r) (+ written r)))))))
+  (make-custom-binary-output-port "socket-output-port" write! #f #f #F))
 
 (define-foreign-struct addrinfo
   (fields (int ai-flags)
@@ -337,12 +383,11 @@
   (lambda (x)
     (define (resolve names)
       (if (null? (cdr names))
-	  (case (car names)
-	    ((read)  #'usocket:SHUT_RD)
-	    ((write) #'usocket:SHUT_WR)
-	    (else =>
-		  (lambda (name)
-		    (syntax-violation 'shutdown-method "unknown flag" name))))
+	  (let ((name (car names)))
+	    (case name
+	      ((read)  #'usocket:SHUT_RD)
+	      ((write) #'usocket:SHUT_WR)
+	      (else (syntax-violation 'shutdown-method "unknown flag" name))))
 	  ;; needs to be read and write
 	  (or (and (null? (cddr names))
 		   (memq 'write names)
@@ -364,12 +409,13 @@
 (define c:poll
   (foreign-procedure *psystem:libc* int poll (pointer unsigned-int int)))
 (define (socket-readable? sock)
-  (define fd (socket-read-poll sock))
-  (let ((n (c:poll fd 1 -1)))
+  (pollfd-readable? (socket-read-poll sock) -1))
+(define (pollfd-readable? fd timeout)
+  (let ((n (c:poll fd 1 timeout)))
     (and (= n 1)
 	 (= (bitwise-and (pollfd-revents fd) usocket:POLLIN) usocket:POLLIN)
-	 (zero? (bitwise-and (pollfd-revents fd) usocket:POLLHUP))
-	 (pollfd-revents-set! fd 0))))
+	 (zero? (bitwise-and (pollfd-revents fd) usocket:POLLHUP)))))
+
 (define (socket-writeable? sock)
   (= (c:poll (socket-write-poll sock) 1 0) 1))
 

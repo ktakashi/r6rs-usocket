@@ -44,6 +44,13 @@
 
 	    call-with-socket
 
+	    address-family address-info 
+	    socket-domain ip-protocol
+	    message-type shutdown-method
+	    
+	    (rename (bitwise-ior socket-merge-flags))
+	    socket-purge-flags
+	    
 	    (rename (usocket:AF_UNSPEC *af-unspec*)
 		    (usocket:AF_INET *af-inet*)
 		    (usocket:AF_INET6 *af-inet6*)
@@ -266,6 +273,90 @@
   (let-values ((args (proc socket)))
     (socket-close socket)
     (apply values args)))
+
+;; Copied from Sagittarius
+(define-syntax define-one-flag-operation
+  (syntax-rules ()
+    ((_ ?name (?op ?flag) ...)
+     (define-syntax ?name
+       (lambda (x)
+	 (define (lookup name)
+	   (case (syntax->datum name)
+	     ((?op)   #'?flag)
+	     ...
+	     (else (syntax-violation '?name "unknown flag" name))))
+	 (syntax-case x ()
+	   ((_ flag)
+	    (lookup #'flag))))))))
+
+(define-one-flag-operation address-family
+  (inet   usocket:AF_INET)
+  (inet6  usocket:AF_INET6)
+  (unspec usocket:AF_UNSPEC))
+
+(define-one-flag-operation ip-protocol
+  (ip  usocket:IPPROTO_IP)
+  (tcp usocket:IPPROTO_TCP)
+  (udp usocket:IPPROTO_UDP))
+
+(define-one-flag-operation socket-domain 
+  (stream   usocket:SOCK_STREAM)
+  (datagram usocket:SOCK_DGRAM))
+
+(define-syntax define-flag-operation
+  (syntax-rules ()
+    ((_ ?name (?op ?flags) ...)
+     (define-syntax ?name
+       (lambda (x)
+	 (define (lookup names flags)
+	   (syntax-case names (?op ...)
+	     (() flags)
+	     ((?op rest (... ...)) 
+	      (lookup #'(rest (... ...)) (bitwise-ior ?flags)))
+	     ...
+	     (_ (syntax-violation '?name "unknown flag" names))))
+	 (syntax-case x ()
+	   ((_ names (... ...))
+	    (with-syntax ((flags (lookup #'(names (... ...)) 0)))
+	      #'flags))))))))
+
+(define-flag-operation address-info
+  (canoname     usocket:AI_CANONNAME)
+  (numerichost  usocket:AI_NUMERICHOST)
+  (v4mapped     usocket:AI_V4MAPPED)
+  (all          usocket:AI_ALL)
+  (addrconfig   usocket:AI_ADDRCONFIG))
+
+(define-flag-operation message-type
+  (none 0)
+  (peek usocket:MSG_PEEK)
+  (oob  usocket:MSG_OOB)
+  (wait-all usocket:MSG_WAITALL))
+
+(define-syntax shutdown-method
+  (lambda (x)
+    (define (resolve names)
+      (if (null? (cdr names))
+	  (case (car names)
+	    ((read)  #'usocket:SHUT_RD)
+	    ((write) #'usocket:SHUT_WR)
+	    (else =>
+		  (lambda (name)
+		    (syntax-violation 'shutdown-method "unknown flag" name))))
+	  ;; needs to be read and write
+	  (or (and (null? (cddr names))
+		   (memq 'write names)
+		   (memq 'read names)
+		   #'usocket:SHUT_RDWR)
+	      (syntax-violation 'shutdown-method "invalid shutdown-method"
+				names))))
+    (syntax-case x ()
+      ((_ names ...)
+       (resolve (syntax->datum #'(names ...)))))))
+
+(define (socket-purge-flags base . rest) 
+  (let ((mask* (map (lambda (f) (bitwise-xor -1 f)) rest)))
+    (apply bitwise-and base mask*)))
 
 ;; internal for now
 

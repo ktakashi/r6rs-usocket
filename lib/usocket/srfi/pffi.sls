@@ -29,6 +29,7 @@
 ;;;
 
 ;; SRFI-106 implementation of PFFI
+#!r6rs
 (library (usocket srfi pffi)
     (export socket?
 	    ;; the rest comes later
@@ -224,15 +225,14 @@
 (define (socket-shutdown sock how) (c:shutdown (socket-socket sock) how))
 
 (define (socket-accept sock)
-  (define (free ss sl) (c:free ss) (c:free sl))
+  (define (free ss sl) (psystem:free ss) (psystem:free sl))
   (unless (socket? sock)
     (assertion-violation 'socket-accept "A socket required" sock))
   (let ((ss (psystem:malloc usocket:size-of-sockaddr-storage))
 	(sl (psystem:malloc usocket:size-of-socklen_t)))
     (let ((fd (c:accept (socket-socket sock) ss sl)))
-      (when (= fd -1)
-	(free ss sl)
-	(error 'socket-accept "Failed to accept"))
+      (free ss sl)
+      (when (= fd -1) (error 'socket-accept "Failed to accept"))
       (make-socket fd 'server #f #f))))
 
 (define (socket-send socket bv . opt)

@@ -275,7 +275,6 @@
 (define (socket-readable? sock)
   (define fd (socket-read-poll sock))
   (let ((n (c:poll fd 1 -1)))
-    (display (pollfd-revents fd)) (newline)
     (and (= n 1)
 	 (= (bitwise-and (pollfd-revents fd) usocket:POLLIN) usocket:POLLIN)
 	 (zero? (bitwise-and (pollfd-revents fd) usocket:POLLHUP))

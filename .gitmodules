@@ -4,3 +4,6 @@
 [submodule "deps/psystem"]
 	path = deps/psystem
 	url = https://github.com/ktakashi/r6rs-psystem.git
+[submodule "test-deps/testing"]
+	path = test-deps/testing
+	url = https://github.com/ktakashi/chez-testing.git

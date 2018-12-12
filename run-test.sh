@@ -1,20 +1,12 @@
 #!/bin/bash
 
-declare -a implementations=(sagittarius@0.9.2)
+declare -a implementations=(sagittarius@0.9.2 chez@v9.5)
 declare -a test_files=(test/tcp)
 
-# later
-# echo "Preparing for Chez Scheme"
-# create_symlink() {
-#     flag=$1
-#     target=$2
-#     src=$3
-#     if [ ! ${flag} ${src} ]; then
-# 	ln -s ${target} ${src}
-#     fi
-# }
-# create_symlink -f %3a64.chezscheme.sls tests/lib/srfi/:64.sls
-# create_symlink -d %3a64 tests/lib/srfi/:64
+echo "Preparing for Chez Scheme"
+cd test-deps/testing
+./setup.sh
+cd ../../
 
 check_output() {
     local status=0
@@ -40,6 +32,7 @@ for impl in ${implementations[@]}; do
 	scheme-env run ${impl} \
 		   --loadpath lib \
 		   --loadpath deps/pffi/src --loadpath deps/psystem/lib \
+		   --loadpath test-deps/testing/lib \
 		   --standard r6rs --program ${file}.scm | check_output
 	case ${EXIT_STATUS} in
 	    0) EXIT_STATUS=$? ;;

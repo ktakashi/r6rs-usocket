@@ -18,8 +18,10 @@
 	(out (transcoded-port (client-usocket-output-port s)
 			      (native-transcoder))))
     (put-string out "hi\n")
+    (flush-output-port out)
     (test-equal "hi" (get-string-n in 2))
     (put-string out "exit")
+    (flush-output-port out)
     (socket-shutdown&close s)))
 
 (test-end)

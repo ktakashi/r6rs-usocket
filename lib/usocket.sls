@@ -44,10 +44,6 @@
 
 	    server-usocket?
 	    server-usocket-accept!
-	    ;; for developer
-	    make-client-usocket
-	    make-server-usocket
-	    usocket-raw-socket
 
 	    make-tcp-client-usocket
 	    make-tcp-server-usocket

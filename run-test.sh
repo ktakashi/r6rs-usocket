@@ -35,9 +35,11 @@ for impl in ${implementations[@]}; do
     for file in ${test_files[@]}; do
 	scheme-env run ${impl} \
 		   --loadpath lib \
+		   --loadpath deps/pffi/src --loadpath deps/psystem/lib \
 		   --standard r6rs --program ${file}-server.scm &
 	scheme-env run ${impl} \
 		   --loadpath lib \
+		   --loadpath deps/pffi/src --loadpath deps/psystem/lib \
 		   --standard r6rs --program ${file}.scm | check_output
 	case ${EXIT_STATUS} in
 	    0) EXIT_STATUS=$? ;;

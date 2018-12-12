@@ -1,6 +1,6 @@
 ;;; -*- mode:scheme; coding:utf-8 -*-
 ;;;
-;;; usocket/sockets.larceny.sls - Socket protocols (Larceny)
+;;; usocket/api.sls - Socket protocols
 ;;;
 ;;;   Copyright (c) 2018  Takashi Kato  <ktakashi@ymail.com>
 ;;;
@@ -28,61 +28,52 @@
 ;;;   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ;;;
 
-
-;; There are variety of restrictions on Larceny implementation.
-;; - It can't create UDP socket
-;; - Socket can't be shutdown
-;; - No explicit socket close for server socket
-
 #!r6rs
-(library (usocket sockets)
-    (export make-tcp-client-socket
-	    make-tcp-server-socket
-	    make-udp-client-socket
-	    make-udp-server-socket)
+(library (usocket api)
+    (export make-tcp-client-usocket
+	    make-tcp-server-usocket
+	    make-udp-client-usocket
+	    make-udp-server-usocket)
     (import (rnrs)
-	    (prefix (usocket types) usocket:)
-	    (primitives r5rs:require get-service-by-name make-client-socket
-			make-server-socket server-socket-accept
-			socket-input-port socket-output-port))
+	    (usocket types)
+	    (prefix (usocket srfi) srfi:))
 
-(define (make-tcp-client-socket host service)
-  (let ((s (make-client-socket host service)))
+(define (make-tcp-client-usocket host service)
+  (let ((s (srfi:make-client-socket host service)))
     (%make-socket s)))
 
-(define (make-tcp-server-socket service)
-  (let ((s (make-server-socket service)))
+(define (make-tcp-server-usocket service)
+  (let ((s (srfi:make-server-socket service)))
     (%make-server-socket s)))
 
-(define (not-supported who)
-  (raise (condition
-	  (make-implementation-restriction-violation)
-	  (make-who-condition who)
-	  (make-message-condition "Not supported"))))
-(define (make-udp-client-socket host service)
-  (not-supported 'make-udp-client-socket))
+(define (make-udp-client-usocket host service)
+  (let ((s (srfi:make-client-socket host service
+				    srfi:*af-inet* srfi:*sock-dgram*)))
+    (%make-socket s)))
 
-(define (make-udp-server-socket service)
-  (not-supported 'make-udp-server-socket))
+(define (make-udp-server-usocket service)
+  (let ((s (srfi:make-server-socket service srfi:*af-inet* srfi:*sock-dgram*)))
+    (%make-server-socket s)))
 
 (define (make-shutdowner s)
-  ;; Larceny doesn't support shutdown... so do nothing
-  (lambda (how) #f))
-(define (make-closer in out)
-  (lambda () (close-input-port in) (close-output-port out)))
+  (lambda (how)
+    (case how
+      ((read) (srfi:socket-shutdown s srfi:*shut-rd*))
+      ((write) (srfi:socket-shutdown s srfi:*shut-wr*))
+      ((read&write) (srfi:socket-shutdown s srfi:*shut-rdwr*))
+      (else (assertion-violation 'socket-shutdown!
+				 "Unknown shutdown method" how)))))
+(define (make-closer s) (lambda () (srfi:socket-close s)))
 (define (%make-socket s)
-  (let ((in (socket-input-port s))
-	(out (socket-output-port s)))
-    (usocket:make-client-socket s (make-shutdowner s) (make-closer in out)
-				in out)))
+  (make-client-usocket s
+	       (make-shutdowner s)
+	       (make-closer s)
+	       (srfi:socket-input-port s)
+	       (srfi:socket-output-port s)))
 
 (define (%make-server-socket s)
-  (usocket:make-server-socket s
-   (make-shutdowner s)
-   (lambda () #f) ;; we can't do anything...
-   (lambda ()
-     (let-values (((cs addr) (server-socket-accept s)))
-       (%make-socket cs)))))
-
-(r5rs:require 'socket)
+  (make-server-usocket s
+		      (make-shutdowner s)
+		      (make-closer s)
+		      (lambda () (%make-socket (srfi:socket-accept s)))))
 )

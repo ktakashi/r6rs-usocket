@@ -1,6 +1,6 @@
 ;;; -*- mode:scheme; coding:utf-8 -*-
 ;;;
-;;; usocket.sls - USocket: Portable R6RS socket library
+;;; usocket/srfi.sls - Portable layer of SRFI support
 ;;;
 ;;;   Copyright (c) 2018  Takashi Kato  <ktakashi@ymail.com>
 ;;;
@@ -28,35 +28,37 @@
 ;;;   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ;;;
 
+;; this layer using (usocket srfi pffi)
 #!r6rs
-(library (usocket)
-    (export usocket?
-	    usocket-close!
-	    usocket-shutdown!
+(library (usocket srfi)
+    (export socket?
+	    ;; the rest comes later
+	    make-client-socket
+	    make-server-socket
 
-	    *usocket:shutdown-read*
-	    *usocket:shutdown-write*
-	    *usocket:shutdown-read&write*
+	    socket-input-port
+	    socket-output-port
 
-	    client-usocket?
-	    client-usocket-input-port
-	    client-usocket-output-port
+	    socket-accept ;; for server
+	    socket-send
+	    socket-recv
+	    socket-close
+	    socket-shutdown
 
-	    server-usocket?
-	    server-usocket-accept!
-	    ;; for developer
-	    make-client-usocket
-	    make-server-usocket
-	    usocket-raw-socket
+	    call-with-socket
 
-	    make-tcp-client-usocket
-	    make-tcp-server-usocket
-	    make-udp-client-usocket
-	    make-udp-server-usocket
+	    address-family address-info 
+	    socket-domain ip-protocol
+	    message-type shutdown-method
 
-	    ;; for developers
-	    make-client-usocket
-	    make-server-usocket
-	    usocket-raw-socket)
-    (import (usocket types)
-	    (usocket api)))
+	    socket-merge-flags
+	    socket-purge-flags
+	    
+	    *af-unspec* *af-inet* *af-inet6*
+	    *sock-stream* *sock-dgram*
+	    *ai-canonname* *ai-numerichost* *ai-v4mapped*
+	    *ai-all* *ai-addrconfig*
+	    *ipproto-ip* *ipproto-tcp* *ipproto-udp*
+	    *msg-peek* *msg-oob* *msg-waitall*
+	    *shut-rd* *shut-wr* *shut-rdwr*)
+    (import (usocket srfi pffi)))

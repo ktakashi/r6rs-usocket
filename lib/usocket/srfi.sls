@@ -60,5 +60,8 @@
 	    *ai-all* *ai-addrconfig*
 	    *ipproto-ip* *ipproto-tcp* *ipproto-udp*
 	    *msg-peek* *msg-oob* *msg-waitall*
-	    *shut-rd* *shut-wr* *shut-rdwr*)
+	    *shut-rd* *shut-wr* *shut-rdwr*
+
+	    ;; these are *not* a part of SRFI
+	    socket-error? socket-error-socket)
     (import (usocket srfi pffi)))

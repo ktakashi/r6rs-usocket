@@ -59,5 +59,8 @@
 	    *ai-all* *ai-addrconfig*
 	    *ipproto-ip* *ipproto-tcp* *ipproto-udp*
 	    *msg-peek* *msg-oob* *msg-waitall*
-	    *shut-rd* *shut-wr* *shut-rdwr*)
-    (import (srfi :106 socket)))
+	    *shut-rd* *shut-wr* *shut-rdwr*
+
+	    socket-error? socket-error-socket)
+    (import (srfi :106 socket)
+	    (only (sagittarius socket) socket-error? socket-error-socket)))

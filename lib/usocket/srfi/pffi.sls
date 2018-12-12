@@ -73,17 +73,22 @@
 		    (usocket:SHUT_RD *shut-rd*)
 		    (usocket:SHUT_WR *shut-wr*)
 		    (usocket:SHUT_RDWR *shut-rdwr*))
-	    )
+	    socket-error? socket-error-socket)
     (import (rnrs)
 	    (pffi)
 	    (psystem libc)
 	    (psystem os)
 	    (usocket consts))
 
-;;; TODO Should this be somewhere else?
+(define-condition-type &socket &error
+  make-socket-error socket-error?
+  (socket socket-error-socket))
+
+(define-record-type base-socket
+  (fields (immutable socket socket-socket)))
 (define-record-type socket
-  (fields socket
-	  type
+  (parent base-socket)
+  (fields type
 	  host
 	  service
 	  input-port
@@ -91,14 +96,29 @@
 	  ;; pollfds we have 2 fds in case of multi thread env
 	  read-poll
 	  write-poll)
-  (protocol (lambda (p)
+  (protocol (lambda (n)
 	      (lambda (socket type host service)
 		(let ((read-poll (make-pollfd socket usocket:POLLIN 0)))
-		  (p socket type host service
-		     (make-socket-input-port socket read-poll)
-		     (make-socket-output-port socket)
-		     read-poll
-		     (make-pollfd socket usocket:POLLOUT 0)))))))
+		  ((n socket) type host service
+		   (make-socket-input-port socket read-poll)
+		   (make-socket-output-port socket)
+		   read-poll
+		   (make-pollfd socket usocket:POLLOUT 0)))))))
+
+(define (socket-error socket who message . irr)
+  (raise (condition (make-socket-error socket)
+		    (make-who-condition who)
+		    (make-message-condition message)
+		    (make-irritants-condition irr))))
+(define (socket-i/o-error socket who message . irr)
+  (raise (condition (make-socket-error socket)
+		    (make-i/o-error)
+		    (make-who-condition who)
+		    (make-message-condition message)
+		    (make-irritants-condition irr))))
+;; only for socket-close
+(define (fd->socket fd) (make-base-socket fd))
+(define *invalid-socket* (fd->socket -1))
 
 (define buffer-size 1024)
 (define (make-socket-input-port fd pollfd)
@@ -114,7 +134,8 @@
 	0
 	(let* ((size (min count buffer-size))
 	       (r (c:recv fd bufp size usocket:MSG_NOSIGNAL)))
-	  (when (negative? r) (error 'socket-recv "Failed to receive"))
+	  (when (negative? r)
+	    (socket-i/o-error (fd->socket fd) 'socket-recv "Failed to receive"))
 	  (set! check-needed?
 		(or (not (= r size)) (and (= count buffer-size) (= r size))))
 	  ;; let the custom port handle the remaining count
@@ -136,7 +157,9 @@
 		((= i size))
 	      (bytevector-u8-set! buffer i (bytevector-u8-ref bv (+ i start))))
 	    (let ((r (c:send fd bufp size usocket:MSG_NOSIGNAL)))
-	      (when (negative? r) (error 'socket-send "Failed to send"))
+	      (when (negative? r)
+		(socket-i/o-error
+		 (fd->socket fd) 'socket-send "Failed to send"))
 	      (loop (- rest r) (+ written r)))))))
   (make-custom-binary-output-port "socket-output-port" write! #f #f #F))
 
@@ -230,7 +253,8 @@
     (let ((r (c:getaddrinfo host service hint box)))
       (unless (zero? r)
 	(psystem:free box)
-	(error 'getaddrinfo "Failed to call getaddrinfo" host service))
+	(socket-error *invalid-socket*
+	 'getaddrinfo "Failed to call getaddrinfo" host service))
       box)))
 (define (freeaddrinfo box)
   (c:freeaddrinfo (pointer-ref-c-pointer box 0))
@@ -256,7 +280,9 @@
   (let* ((box (getaddrinfo host service flags family socktype protocol))
 	 (sock (get-socket (pointer-ref-c-pointer box 0) c:connect)))
     (freeaddrinfo box)
-    (unless sock (error 'make-client-socket "Failed to connect" host service))
+    (unless sock
+      (socket-error *invalid-socket*
+       'make-client-socket "Failed to connect" host service))
     (make-socket sock 'client host service)))
 
 (define (make-server-socket service . opts)
@@ -267,11 +293,13 @@
   (let* ((box (getaddrinfo null-pointer service 0 family socktype protocol))
 	 (sock (get-socket (pointer-ref-c-pointer box 0) c:bind)))
     (freeaddrinfo box)
-    (unless sock (error 'make-server-socket "Failed to bind" service))
+    (unless sock
+      (socket-error *invalid-socket*
+       'make-server-socket "Failed to bind" service))
     (when (= socktype usocket:SOCK_STREAM)
       (unless (zero? (c:listen sock usocket:SOMAXCONN))
 	(c:close sock)
-	(error 'make-server-socket "Failed to listen" service)))
+	(socket-error sock 'make-server-socket "Failed to listen" service)))
     (make-socket sock 'server #f service)))
 
 (define (socket-close sock) (c:close (socket-socket sock)))
@@ -279,19 +307,22 @@
 
 (define (socket-accept sock)
   (define (free ss sl) (psystem:free ss) (psystem:free sl))
-  (unless (socket? sock)
-    (assertion-violation 'socket-accept "A socket required" sock))
+  (unless (and (socket? sock) (eq? 'server (socket-type sock)))
+    (assertion-violation 'socket-accept "A server socket required" sock))
   (let ((ss (psystem:malloc usocket:size-of-sockaddr-storage))
 	(sl (psystem:malloc usocket:size-of-socklen_t)))
     (let ((fd (c:accept (socket-socket sock) ss sl)))
       (free ss sl)
-      (when (= fd -1) (error 'socket-accept "Failed to accept"))
-      (make-socket fd 'server #f #f))))
+      (when (= fd -1) (socket-error sock 'socket-accept "Failed to accept"))
+      ;; it's not a server socket anymore :)
+      (make-socket fd 'client #f #f))))
 
 (define (socket-send socket bv . opt)
   (define flags (get-optional opt 0))
   (unless (bytevector? bv)
     (assertion-violation 'socket-send "Bytevector required" bv))
+  (unless (socket? socket)
+    (assertion-violation 'socket-send "Socket required" socket))
   (unless (socket-writeable? socket)
     (assertion-violation 'socket-send "Socket is not writable" bv))
   (c:send (socket-socket socket)
@@ -305,10 +336,11 @@
   ;; supporting implementations have proper bytevector->pointer
   ;; means it can share the buffer
   (define p (bytevector->pointer buf))
-  (unless (socket-readable? socket) (error 'socket-recv "Socket not available"))
+  (unless (socket-readable? socket)
+    (socket-i/o-error socket 'socket-recv "Socket not available"))
   (let ((c (c:recv fd p size flags)))
     (cond ((= c size) buf)
-	  ((< c 0) (error 'socket-recv "Failed to receive"))
+	  ((< c 0) (socket-i/o-error socket 'socket-recv "Failed to receive"))
 	  ((< c size)
 	   (let ((r (make-bytevector c)))
 	     (do ((i 0 (+ i 1)))

@@ -53,6 +53,8 @@ Supported implementations
 Currently the following implemnetations are supported.
 
 - Sagittarius Scheme (0.9.4 or later)
+- Chez Scheme (v9.5)
+- Larceny (1.3)
 
 Copyright and lincence
 ======================

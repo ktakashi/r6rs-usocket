@@ -19,7 +19,7 @@
 			      (native-transcoder))))
     (put-string out "hi\n")
     (flush-output-port out)
-    (test-equal "hi" (get-string-n in 2))
+    (test-equal "Receive" "hi" (get-string-n in 2))
     (put-string out "exit")
     (flush-output-port out)
     (socket-shutdown&close s)))

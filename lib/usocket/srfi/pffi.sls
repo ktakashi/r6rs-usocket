@@ -123,17 +123,18 @@
 (define buffer-size 1024)
 (define (make-socket-input-port fd pollfd)
   ;; internal buffer
-  (define buffer (make-bytevector buffer-size))
-  (define bufp (bytevector->pointer buffer))
+  (define buffer (psystem:malloc buffer-size))
   (define check-needed? #f)
+
+  (define (close) (psystem:free buffer))
   (define (read! bv start count)
     ;; if the last recv is less than expected or exactly the same
     ;; as buffer-size, then we need to check if there's next data
     ;; available or not.
     (if (and check-needed? (not (pollfd-readable? pollfd 0)))
-	0
+	(begin (set! check-needed? #f ) 0)
 	(let* ((size (min count buffer-size))
-	       (r (c:recv fd bufp size usocket:MSG_NOSIGNAL)))
+	       (r (c:recv fd buffer size usocket:MSG_NOSIGNAL)))
 	  (when (negative? r)
 	    (socket-i/o-error (fd->socket fd) 'socket-recv "Failed to receive"))
 	  (set! check-needed?
@@ -141,13 +142,15 @@
 	  ;; let the custom port handle the remaining count
 	  (do ((i 0 (+ i 1)))
 	      ((= i r) r)
-	    (bytevector-u8-set! bv (+ i start) (bytevector-u8-ref buffer i))))))
-  (make-custom-binary-input-port "socket-input-port" read! #f #f #f))
+	    (bytevector-u8-set! bv (+ i start)
+				(pointer-ref-c-uint8 buffer i))))))
+  (make-custom-binary-input-port "socket-input-port" read! #f #f close))
 
 (define (make-socket-output-port fd)
   ;; internal buffer
-  (define buffer (make-bytevector buffer-size))
-  (define bufp (bytevector->pointer buffer))
+  (define buffer (psystem:malloc buffer-size))
+
+  (define (close) (psystem:free buffer))
   (define (write! bv start count)
     (let loop ((rest count) (written 0))
       (if (= written count)
@@ -155,13 +158,14 @@
 	  (let ((size (min rest buffer-size)))
 	    (do ((i 0 (+ i 1)))
 		((= i size))
-	      (bytevector-u8-set! buffer i (bytevector-u8-ref bv (+ i start))))
-	    (let ((r (c:send fd bufp size usocket:MSG_NOSIGNAL)))
+	      (pointer-set-c-uint8! buffer i 
+				    (bytevector-u8-ref bv (+ i start))))
+	    (let ((r (c:send fd buffer size usocket:MSG_NOSIGNAL)))
 	      (when (negative? r)
 		(socket-i/o-error
 		 (fd->socket fd) 'socket-send "Failed to send"))
 	      (loop (- rest r) (+ written r)))))))
-  (make-custom-binary-output-port "socket-output-port" write! #f #f #F))
+  (make-custom-binary-output-port "socket-output-port" write! #f #f close))
 
 (define-foreign-struct addrinfo
   (fields (int ai-flags)

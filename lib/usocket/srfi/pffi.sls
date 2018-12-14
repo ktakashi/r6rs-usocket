@@ -124,26 +124,20 @@
 (define (make-socket-input-port fd pollfd)
   ;; internal buffer
   (define buffer (psystem:malloc buffer-size))
-  (define check-needed? #f)
-
   (define (close) (psystem:free buffer))
+  ;; we don't check if the socket has input or now here.
+  ;; so when get-bytevector-n is called with more than the
+  ;; bytes ready, then let the caller wait...
   (define (read! bv start count)
-    ;; if the last recv is less than expected or exactly the same
-    ;; as buffer-size, then we need to check if there's next data
-    ;; available or not.
-    (if (and check-needed? (not (pollfd-readable? pollfd 0)))
-	(begin (set! check-needed? #f ) 0)
-	(let* ((size (min count buffer-size))
-	       (r (c:recv fd buffer size usocket:MSG_NOSIGNAL)))
-	  (when (negative? r)
-	    (socket-i/o-error (fd->socket fd) 'socket-recv "Failed to receive"))
-	  (set! check-needed?
-		(or (not (= r size)) (and (= count buffer-size) (= r size))))
-	  ;; let the custom port handle the remaining count
-	  (do ((i 0 (+ i 1)))
-	      ((= i r) r)
-	    (bytevector-u8-set! bv (+ i start)
-				(pointer-ref-c-uint8 buffer i))))))
+    (let* ((size (min count buffer-size))
+	   (r (c:recv fd buffer size usocket:MSG_NOSIGNAL)))
+      (when (negative? r)
+	(socket-i/o-error (fd->socket fd) 'socket-recv "Failed to receive"))
+      ;; let the custom port handle the remaining count
+      (do ((i 0 (+ i 1)))
+	  ((= i r) r)
+	(bytevector-u8-set! bv (+ i start)
+			    (pointer-ref-c-uint8 buffer i)))))
   (make-custom-binary-input-port "socket-input-port" read! #f #f close))
 
 (define (make-socket-output-port fd)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-declare -a implementations=(sagittarius@0.9.2 chez@v9.5)
+declare -a implementations=(sagittarius@0.9.4 chez@v9.5)
 declare -a test_files=(test/tcp)
 
 echo "Preparing for Chez Scheme"
@@ -29,6 +29,8 @@ for impl in ${implementations[@]}; do
 		   --loadpath lib \
 		   --loadpath deps/pffi/src --loadpath deps/psystem/lib \
 		   --standard r6rs --program ${file}-server.scm &
+	# wait until the server is running
+	sleep 1
 	scheme-env run ${impl} \
 		   --loadpath lib \
 		   --loadpath deps/pffi/src --loadpath deps/psystem/lib \

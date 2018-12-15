@@ -1,5 +1,6 @@
 #!r6rs
 (import (rnrs)
+	(pffi)
 	(usocket))
 
 (define service "10000")
@@ -24,6 +25,8 @@
 	       (socket-shutdown&close s)
 	       (loop (server-usocket-accept! socket)))
 	      (else (put-string out line)
+		    (flush-output-port out)
+		    (put-string out "\n")
 		    (flush-output-port out)
 		    (loop2)))))))
 

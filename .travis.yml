@@ -27,11 +27,12 @@ before_install:
   - git submodule update --init
   - curl https://raw.githubusercontent.com/ktakashi/scheme-env/master/bin/install.sh | bash
   - export PATH=$PATH:~/.scheme-env/bin
+  - make
 
 install:
   - scheme-env install sagittarius@0.9.4
   - scheme-env install chez@v9.5
-  - scheme-env install larceny@1.3
+#  - scheme-env install larceny@1.3
 
 script:
   - ./run-tests.sh

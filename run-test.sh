@@ -3,6 +3,10 @@
 declare -a implementations=(sagittarius@0.9.4 chez@v9.5)
 declare -a test_files=(test/tcp)
 
+if [ x"${CI}" != x"" ]; then
+    implementations+=(larceny@1.3)
+fi
+
 echo "Preparing for Chez Scheme"
 cd test-deps/testing
 ./setup.sh

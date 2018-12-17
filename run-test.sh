@@ -47,7 +47,6 @@ for impl in ${implementations[@]}; do
     echo Done!
     echo
 done
-cd ..
 
 echo Library test status ${EXIT_STATUS}
 exit ${EXIT_STATUS}

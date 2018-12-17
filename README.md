@@ -69,8 +69,28 @@ Supported implementations
 Currently the following implemnetations are supported.
 
 - Sagittarius Scheme (0.9.4 or later)
-- Chez Scheme (v9.5)
-- Larceny (1.3)
+- Chez Scheme (v9.5), *`make` required, See below*
+- Larceny (1.3), *`make` required, See below*
+
+Platform dependent values
+-------------------------
+
+Some of the implemnetations supported this library requires platform
+dependent values (e.g. `AF_INET`). This library provides an easy way
+to get those values, requires `make` and C compiler. You can simply
+type the following command in the project root directory:
+
+```shell
+$ make
+```
+
+By default, it uses `cc` which is an alias of default C compiler in the
+most of the platforms. If you want to change the compile for some reason,
+you can do like this:
+
+```shell
+$ make CC=gcc
+```
 
 How to add implemnetations
 ==========================

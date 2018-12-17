@@ -47,6 +47,22 @@ The library provides the following APIs.
   Create a UDP server socket object which accepts an input on the *service*.
   The *service* can be an integer or string.
 
+Bonus
+=====
+
+This library provides portable SRFI 106 implementation with the name
+of `(usocket srfi pffi)`. This library provides all the interface
+defined in SRFI 106 and extra `socket-error?` and `socket-error-socket`
+procedures.
+
+Dependencies
+============
+
+This library depends on the following libraries
+
+- [`(pffi)`](https://github.com/ktakashi/r6rs-pffi/)
+- [`(psystem libc)`](https://github.com/ktakashi/r6rs-psystem/)
+
 Supported implementations
 =========================
 
@@ -55,6 +71,24 @@ Currently the following implemnetations are supported.
 - Sagittarius Scheme (0.9.4 or later)
 - Chez Scheme (v9.5)
 - Larceny (1.3)
+
+How to add implemnetations
+==========================
+
+The easiest way would be using the portable SRFI 106 implemnetations, which
+requires to be supported by the `(psystem libc)` library. See the dependencies
+section and read the instruction of the dependency.
+
+If the implemnetation supports socket, it's most of the case better
+to use it. In that case, there are following 2 scenarios:
+
+1. Implement `(pffi srfi)`: This requires entire SRFI 106 procedures.
+2. Implement `(pffi api)`: This requires implementing the following 4 procedures
+   - `make-tcp-client-usocket`
+   - `make-tcp-server-usocket`
+   - `make-udp-client-usocket`
+   - `make-udp-server-usocket`
+   See default `lib/usocket/api.sls` as an example.
 
 Copyright and lincence
 ======================

@@ -35,7 +35,7 @@ for impl in ${implementations[@]}; do
 		   --loadpath lib \
 		   --loadpath deps/pffi/src --loadpath deps/psystem/lib \
 		   --loadpath test-deps/testing/lib \
-		   --standard r6rs --program ${file}.scm | check_output
+		   --standard r6rs --program ${file}.scm 2>&1 | check_output
 	case ${EXIT_STATUS} in
 	    0) EXIT_STATUS=$? ;;
 	esac

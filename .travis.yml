@@ -4,6 +4,10 @@ branches:
   only:
     - master
 
+# We don't need recursive submodule, so do it manually
+git:
+  submodules: false
+
 addons:
   apt:
     update: true
@@ -25,7 +29,7 @@ before_install:
   - export PATH=$PATH:~/.scheme-env/bin
 
 install:
-  - scheme-env install sagittarius@0.9.2
+  - scheme-env install sagittarius@0.9.4
   - scheme-env install chez@v9.5
   - scheme-env install larceny@1.3
 

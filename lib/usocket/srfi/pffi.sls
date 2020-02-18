@@ -225,7 +225,6 @@
   (foreign-procedure *psystem:libc* int recv (int pointer unsigned-int int)))
 
 (define null-pointer (integer->pointer 0))
-(define (null-pointer? p) (zero? (pointer->integer p)))
 
 (define-syntax get-optional
   (syntax-rules ()
